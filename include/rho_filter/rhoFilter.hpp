@@ -21,7 +21,6 @@ private:
     double sampling_time;
     double alpha;
     double k1, k2, k3;
-    int state_space_dim;
     Eigen::MatrixXd M, N, E, S;
     Eigen::MatrixXd M_inv, A_d, I_n, I_4n, B_q, B_s;
     Eigen::MatrixXd m, n, e, s;

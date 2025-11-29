@@ -126,10 +126,10 @@
       const [A,setA] = useState(1.0);
       const [phi,setPhi] = useState(0.0);
       // Filter Gains
-      const [k1,setK1] = useState(1.0);
-      const [k2,setK2] = useState(1.0);
-      const [k3,setK3] = useState(1.0);
-      const [alpha,setAlpha] = useState(1.0);
+      const [k1,setK1] = useState(10.0);
+      const [k2,setK2] = useState(2.0);
+      const [k3,setK3] = useState(2.0);
+      const [alpha,setAlpha] = useState(2.0);
       
       const [running,setRunning] = useState(false);
       const [autoReset,setAutoReset] = useState(true);
@@ -138,7 +138,7 @@
       const simState = useRef({ t:0, q:0, p:0, hp:0 });
       const canvasRef = useRef(null);
       const chart = useLineChart(canvasRef);
-      const [dtMs, setDtMs] = useState(10); // Default 10ms
+      const [dtMs, setDtMs] = useState(8); // Default 10ms
       const dt = dtMs / 1000; // Derived seconds
 
       // Reset Simulation & Rebuild C++ Filter
@@ -176,7 +176,7 @@
              
              const output = filterRef.current.update(input);
              // Assume last element is estimated p (based on context)
-             s.hp = output.get(output.size()-1); 
+             s.hp = output.get(1); 
 
              // Cleanup C++ vectors
              input.delete();
