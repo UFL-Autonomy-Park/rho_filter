@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Lur’e Observer – Wasm Implementation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <!-- Load the compiled Wasm glue code -->
+  <script src="rho_wasm.js"></script>
+  
+  <style>
+    :root{ --bg:#0b0d12; --panel:#11141b; --text:#e9eef6; --accent:#7c9cff; --ok:#1cc88a; --warn:#f59e0b; }
+    body{ margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, sans-serif; }
+    .wrap{ max-width:1200px; margin:0 auto; padding:24px; }
+    .grid{ display:grid; grid-template-columns:1fr 2fr; gap:16px; }
+    .card{ background:var(--panel); border:1px solid #1a2232; border-radius:14px; padding:16px; }
+    .row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .btn{ background:#182134; color:var(--text); padding:8px 12px; border:1px solid #2a3349; border-radius:10px; cursor:pointer; }
+    .input{ width:70px; background:#0f1726; border:1px solid #28314a; color:var(--text); padding:6px; border-radius:6px; }
+    canvas{ background:#0a0f1c; border-radius:12px; border:1px solid #1a2232; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const {useEffect,useMemo,useRef,useState,useCallback} = React;
+
+    // --- Chart Helper ---
+    function useLineChart(canvasRef) {
+      const chartRef = useRef(null);
+      useEffect(()=>{
+        chartRef.current = new Chart(canvasRef.current.getContext('2d'),{
+          type:'line',
+          data:{ datasets:[
+            {label:'True p', data:[], borderColor:'#7c9cff', borderWidth:1.5, pointRadius:0},
+            {label:'Est p (C++)', data:[], borderColor:'#f59e0b', borderWidth:1.5, pointRadius:0}
+          ]},
+          options:{ animation:false, parsing:false, scales:{ x:{type:'linear'} } }
+        });
+        return ()=>chartRef.current.destroy();
+      },[]);
+      
+      return {
+        push: (t, p, hp) => {
+          const c = chartRef.current;
+          if(!c) return;
+          c.data.datasets[0].data.push({x:t, y:p});
+          c.data.datasets[1].data.push({x:t, y:hp});
+          if(c.data.datasets[0].data.length > 500) c.data.datasets.forEach(d=>d.data.shift());
+        },
+        update: () => chartRef.current?.update('none'),
+        reset: () => chartRef.current?.data.datasets.forEach(d=>d.data.length=0)
+      };
+    }
+
+    function App(){
+      const [wasmReady, setWasmReady] = useState(false);
+      const wasmModule = useRef(null);
+      const filterInstance = useRef(null);
+
+      // Plant Parameters
+      const [omega, setOmega] = useState(2.0);
+      const [A, setA] = useState(1.0);
+      const [phi, setPhi] = useState(0.0);
+      
+      // Filter Gains
+      const [k1, setK1] = useState(1.0);
+      const [k2, setK2] = useState(1.0);
+      const [k3, setK3] = useState(1.0);
+      const [alpha, setAlpha] = useState(1.0);
+      
+      const [running, setRunning] = useState(false);
+      const canvasRef = useRef(null);
+      const chartApi = useLineChart(canvasRef);
+      
+      const simState = useRef({ t:0, q:0, p:0 });
+
+      // 1. Initialize Wasm
+      useEffect(() => {
+        createRhoModule().then(Module => {
+          wasmModule.current = Module;
+          setWasmReady(true);
+        });
+      }, []);
+
+      // 2. Reset / Re-instantiate C++ Filter
+      const reset = useCallback(() => {
+        if(!wasmReady) return;
+        
+        // Delete old instance to prevent memory leaks in Wasm heap
+        if(filterInstance.current) filterInstance.current.delete();
+
+        // Instantiate new C++ object: (dt, dim, alpha, k1, k2, k3)
+        // Note: dt=0.01 matches the physics loop below
+        filterInstance.current = new wasmModule.current.RhoFilter(0.01, 1, alpha, k1, k2, k3);
+        
+        // Reset Plant
+        simState.current = { 
+          t:0, 
+          q: A * Math.sin(phi), 
+          p: A * omega * Math.cos(phi) 
+        };
+        chartApi.reset();
+      }, [wasmReady, A, omega, phi, alpha, k1, k2, k3, chartApi]);
+
+      // 3. Main Loop
+      useEffect(() => {
+        let raf;
+        const dt = 0.01; // 10ms fixed step
+        
+        const loop = () => {
+          if(running && filterInstance.current) {
+            const s = simState.current;
+            
+            // --- A. Simulate Plant (JS) ---
+            // Simple Euler for plant physics (q_dot = p, p_dot = -w^2*q)
+            s.q += s.p * dt;
+            s.p += (-omega*omega * s.q) * dt;
+            s.t += dt;
+
+            // --- B. Run C++ Filter ---
+            // Create input vector
+            const inputVec = new wasmModule.current.VectorDouble();
+            inputVec.push_back(s.q);
+            
+            // Call C++
+            const outputVec = filterInstance.current.update(inputVec);
+            
+            // Extract result (Assuming last element is estimated velocity, based on your ROS node)
+            const hp = outputVec.get(outputVec.size() - 1); 
+            
+            // Cleanup Wasm vectors (Manual memory management required for std::vector bindings)
+            inputVec.delete();
+            outputVec.delete();
+
+            // --- C. Update Chart ---
+            chartApi.push(s.t, s.p, hp);
+            chartApi.update();
+          }
+          raf = requestAnimationFrame(loop);
+        };
+        
+        raf = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(raf);
+      }, [running, omega]);
+
+      return (
+        <div className="wrap">
+          <h1>Rho Filter (C++ / Wasm)</h1>
+          
+          <div className="grid">
+             <div className="card">
+                {!wasmReady && <div style={{color:'orange'}}>Loading Wasm...</div>}
+                
+                <div className="row">
+                  <button className="btn" onClick={()=>setRunning(!running)}>{running?'Stop':'Run'}</button>
+                  <button className="btn" onClick={reset}>Reset / Update Gains</button>
+                </div>
+
+                <h3>Plant</h3>
+                <div className="row">
+                  <label>Omega</label> <input className="input" type="number" step="0.1" value={omega} onChange={e=>setOmega(Number(e.target.value))} />
+                </div>
+
+                <h3>Filter (C++)</h3>
+                <div className="row">
+                  <label>Alpha</label> <input className="input" type="number" step="0.1" value={alpha} onChange={e=>setAlpha(Number(e.target.value))} />
+                </div>
+                 <div className="row">
+                  <label>K1</label> <input className="input" type="number" step="0.1" value={k1} onChange={e=>setK1(Number(e.target.value))} />
+                  <label>K2</label> <input className="input" type="number" step="0.1" value={k2} onChange={e=>setK2(Number(e.target.value))} />
+                </div>
+             </div>
+             
+             <div className="card">
+               <canvas ref={canvasRef} height="300"></canvas>
+             </div>
+          </div>
+        </div>
+      );
+    }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
