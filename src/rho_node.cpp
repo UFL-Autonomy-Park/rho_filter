@@ -4,7 +4,7 @@
 #include <vector>
 #include <memory>
 
-#include "rhoFilter.hpp"
+#include "rho_filter/rhoFilter.hpp"
 
 using std::placeholders::_1;
 

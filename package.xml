@@ -7,7 +7,7 @@
     <version>0.0.1</version>
     <description>Rho Filter: Cristian Nino's Late 2025 version with exponential convergence and RISE components. Estimates only derivative higher than what is measurable.</description>
     <maintainer email="mgardenswartz@ufl.edu">user</maintainer>
-    <license>TODO: License declaration</license>
+    <license>MPL-2.0</license>
 
     <buildtool_depend>ament_cmake</buildtool_depend>
 
