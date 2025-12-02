@@ -69,24 +69,11 @@ This project implements a Lur’e Observer using C++ (Eigen) compiled to WebAsse
 
 Run these commands from the **project root**.
 
-### Windows (PowerShell)
-
-(Ensure .\emsdk_env.bat has been run in this session)
-
-emcc src/rhoFilter.cpp src/bindings.cpp `
-  -O3 `
-  -s WASM=1 `
-  -s MODULARIZE=1 `
-  -s EXPORT_NAME='createRhoModule' `
-  --bind `
-  -I eigen `
-  -o rho_wasm.js
-
-### macOS/Linux
+### Windows PowerShell or macOS/Linux
 
 (Adjust include path -I if your Homebrew location differs)
 
-emcc -O3 -Iinclude -I/opt/homebrew/include/eigen3 src/rhoFilter.cpp src/bindings.cpp -o test/gui_test/rho_wasm.js -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME="createRhoModule" -s ALLOW_MEMORY_GROWTH=1 -s NO_DISABLE_EXCEPTION_CATCHING --bind
+emcc -O3 -Iinclude -I/opt/homebrew/include/eigen3 src/rhoFilter.cpp test/gui_test/bindings.cpp -o test/gui_test/rho_wasm.js -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME="createRhoModule" -s ALLOW_MEMORY_GROWTH=1 -s NO_DISABLE_EXCEPTION_CATCHING --bind
 
 ## 3. Running
 

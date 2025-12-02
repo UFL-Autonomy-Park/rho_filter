@@ -40,7 +40,6 @@ include_directories(include)
 # 3. Targets
 
 # Target A: The Physics/Math Library (Native C++)
-# We DO NOT include bindings.cpp here because it requires Emscripten headers.
 add_library(rho_filter_lib STATIC src/rhoFilter.cpp)
 
 # Target B: The Benchmark Executable
