@@ -129,7 +129,7 @@
       const [k1,setK1] = useState(10.0);
       const [k2,setK2] = useState(2.0);
       const [k3,setK3] = useState(2.0);
-      const [alpha,setAlpha] = useState(2.0);
+      const [alpha,setAlpha] = useState(0.5);
       
       const [running,setRunning] = useState(false);
       const [autoReset,setAutoReset] = useState(true);
@@ -175,8 +175,7 @@
              input.push_back(s.q);
              
              const output = filterRef.current.update(input);
-             // Assume last element is estimated p (based on context)
-             s.hp = output.get(1); 
+             s.hp = output.get(0); 
 
              // Cleanup C++ vectors
              input.delete();
