@@ -64,7 +64,7 @@ impl RhoFilter {
         
         RhoFilter {
             alpha,
-            n, // Init field
+            n,
             ad: ad_small.kronecker(&i_n),
             bq: bq_small.kronecker(&i_n),
             bs: bs_small.kronecker(&i_n),

@@ -82,3 +82,30 @@ Browsers block Wasm loading from local files. Serve via HTTP from the project ro
 python3 -m http.server -d test/gui_test 8000
 
 Open http://localhost:8000 in your browser.
+
+
+# Rust vs C++ Benchmark
+
+
+## C++ Benchmark 
+
+In the root project directory, run
+
+```
+mkdir build
+cd build
+cmake ..
+make
+./bench_cpp
+```
+
+The CMake is currently optimized for release for a "best case" comparison.
+
+## Rust Benchmark
+
+In the root project directory, run
+
+```
+cd test/rust_benchmark
+cargo run --release
+```
