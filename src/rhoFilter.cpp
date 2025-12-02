@@ -13,21 +13,20 @@ rhoFilter::rhoFilter(
     double k3
 ) : 
     sampling_time(sampling_time),
+    state_space_dim(state_space_dim),
     alpha(alpha),
     k1(k1),
     k2(k2),
     k3(k3)
 {   
-    zeta_dim = 4 * state_space_dim;
-    num_inputs = state_space_dim;
-
     n.resize(4, 1);
     e.resize(4, 1);
     s.resize(1, 4);
     m.resize(4, 4);
     m_inv.resize(4, 4);
+    zeta_dim = 4 * state_space_dim;
 
-    I_n = Eigen::MatrixXd::Identity(num_inputs, num_inputs);
+    I_n = Eigen::MatrixXd::Identity(state_space_dim, state_space_dim);
     I_4 = Eigen::MatrixXd::Identity(4, 4);
 
     m_12 = -(3 - pow(k1,2) + (2*k1 + k2 + k3)*(k1 + k2));
@@ -43,7 +42,7 @@ rhoFilter::rhoFilter(
          m_13,  0,      m_33,  -1,
          m_14,  0,      m_43,  -k3;
 
-    // The below replaces one line (grr): m_inv = m.colPivHouseholderQr().inverse();
+    // The below replaces one line: m_inv = m.colPivHouseholderQr().inverse();
     double det = pow(k1, 4) + 2*pow(k1, 3)*k2 + pow(k1, 2)*pow(k2, 2) + pow(k1, 2)*k2*k3 + k1*k2 + 2*k1*k3 + 1;
     double invDet = 1.0 / det;
     m_inv(0, 0) = 0;
@@ -66,17 +65,15 @@ rhoFilter::rhoFilter(
     m_inv(3, 2) = (pow(k1, 4) + pow(k1, 3)*k2 - pow(k1, 3)*k3 - pow(k1, 2)*k2*k3 - 4*pow(k1, 2) - 5*k1*k2 + k1*k3 - pow(k2, 2) + k2*k3 - 1) * invDet;
     m_inv(3, 3) = (-2*pow(k1, 2)*k2 - pow(k1, 2)*k3 - k1*pow(k2, 2) - k1*k2*k3 - 5*k1 - 2*k2) * invDet;
 
-    // end m_inv
+    // // Check M * M_inv ~ Identity
+    // Eigen::Matrix4d identity_check = m * m_inv;
 
-    // Check M * M_inv ~ Identity
-    Eigen::Matrix4d identity_check = m * m_inv;
+    // std::cout << "M * M_inv (Should be Identity):" << std::endl;
+    // std::cout << identity_check << std::endl;
 
-    std::cout << "M * M_inv (Should be Identity):" << std::endl;
-    std::cout << identity_check << std::endl;
-
-    // Quantitative check
-    double error = (identity_check - Eigen::Matrix4d::Identity()).norm();
-    std::cout << "Inverse Error Norm: " << error << std::endl;
+    // // Quantitative check
+    // double error = (identity_check - Eigen::Matrix4d::Identity()).norm();
+    // std::cout << "Inverse Error Norm: " << error << std::endl;
 
     n_12 = 3 - pow(k1,2) + (2*k1 + k2 + k3)*(k1 + k2);
     n_13 = k1 + k2;
@@ -101,7 +98,7 @@ rhoFilter::rhoFilter(
     B_s = Eigen::kroneckerProduct(b_s, I_n);
     S = Eigen::kroneckerProduct(s, I_n);
 
-    v.resize(num_inputs, 1);
+    v.resize(state_space_dim, 1);
     v.setZero();
     zeta.resize(zeta_dim, 1);
     zeta.setZero();
@@ -109,7 +106,7 @@ rhoFilter::rhoFilter(
     next_zeta.setZero();
 }
 
-void rhoFilter::propagate_filter(const Eigen::MatrixXd& last_position) 
+Eigen::MatrixXd rhoFilter::propagate_filter(const Eigen::MatrixXd& last_position) 
 {
     // last_position (q_k) is (n,1)
     // S is (n,4n)
@@ -127,4 +124,6 @@ void rhoFilter::propagate_filter(const Eigen::MatrixXd& last_position)
     next_zeta.noalias() += B_q * last_position;
     next_zeta.noalias() += alpha * B_s * v.cwiseSign();
     zeta = next_zeta;
+
+    return zeta.block(state_space_dim, 0, state_space_dim, 1);
 }

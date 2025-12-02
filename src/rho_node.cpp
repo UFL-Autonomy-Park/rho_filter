@@ -11,7 +11,6 @@ using std::placeholders::_1;
 class RhoFilterNode : public rclcpp::Node {
 public:
     RhoFilterNode() : Node("rho_filter_node") {
-        // Declare parameters with defaults
         declare_parameter("sampling_time_seconds", 0.001);
         declare_parameter("state_space_dim", 1);
         declare_parameter("alpha", 1.0);

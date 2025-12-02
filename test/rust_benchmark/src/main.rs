@@ -3,12 +3,11 @@ use std::time::Instant;
 
 struct RhoFilter {
     alpha: f64,
-    // Pre-computed discrete matrices
+    n: usize,
     ad: DMatrix<f64>,
     bq: DMatrix<f64>,
     bs: DMatrix<f64>,
     s: DMatrix<f64>,
-    // State vectors
     zeta: DVector<f64>,
     v: DVector<f64>,
     next_zeta: DVector<f64>, 
@@ -16,7 +15,6 @@ struct RhoFilter {
 
 impl RhoFilter {
     fn new(dt: f64, n: usize, alpha: f64, k1: f64, k2: f64, k3: f64) -> Self {
-        // --- Matrix Setup (Identical Logic) ---
         let m12 = -(3.0 - k1.powi(2) + (2.0*k1 + k2 + k3)*(k1 + k2));
         let m13 = -(k1 + k2);
         let m14 = -(1.0 + (k1 + k2)*(k3 - k1));
@@ -66,6 +64,7 @@ impl RhoFilter {
         
         RhoFilter {
             alpha,
+            n, // Init field
             ad: ad_small.kronecker(&i_n),
             bq: bq_small.kronecker(&i_n),
             bs: bs_small.kronecker(&i_n),
@@ -77,34 +76,27 @@ impl RhoFilter {
     }
 
     #[inline(always)]
-    fn update(&mut self, q: &DVector<f64>) {
-        // v = S * zeta
-        // Optimized: direct write to self.v, no allocation
+    fn update(&mut self, q: &DVector<f64>) -> DVector<f64> {
         self.s.mul_to(&self.zeta, &mut self.v);
-        self.v += q; // Vector addition is efficient
+        self.v += q;
 
-        // next_zeta = Ad * zeta
-        // Optimized: overwrites next_zeta
         self.ad.mul_to(&self.zeta, &mut self.next_zeta);
-        
-        // next_zeta += Bq * q
-        // Optimized: gemv(alpha, A, x, beta) -> y = alpha*A*x + beta*y
-        // Equivalent to Eigen's noalias() accumulation
         self.next_zeta.gemv(1.0, &self.bq, q, 1.0);
 
-        // next_zeta += alpha * Bs * sgn(v)
         self.v.apply(|x| *x = x.signum()); 
-        
-        // Optimized: Accumulate directly into next_zeta
         self.next_zeta.gemv(self.alpha, &self.bs, &self.v, 1.0);
 
         self.zeta.copy_from(&self.next_zeta);
+        
+        // Return p_hat (rows n to 2n)
+        self.zeta.rows(self.n, self.n).into_owned()
     }
 }
 
 fn main() {
-    let mut f = RhoFilter::new(0.01, 4, 2.0, 10.0, 2.0, 2.0);
-    let mut q = DVector::from_element(4, 1.0);
+    let n = 4;
+    let mut f = RhoFilter::new(0.01, n, 2.0, 10.0, 2.0, 2.0);
+    let mut q = DVector::from_element(n, 1.0);
     let mut p = 0.0;
     let omega = 2.0;
     let dt = 0.01;
@@ -118,5 +110,5 @@ fn main() {
     let duration = start.elapsed();
 
     println!("Time: {}ms", duration.as_millis());
-    println!("Checksum: {}", f.zeta[0]);
+    println!("Checksum: {}", f.zeta[n]);
 }

@@ -12,7 +12,7 @@ public:
                double k2,
                double k3);
 
-    void propagate_filter(const Eigen::MatrixXd&);
+    Eigen::MatrixXd propagate_filter(const Eigen::MatrixXd&);
 
     // Internal state of the filter
     Eigen::MatrixXd zeta;
@@ -22,7 +22,7 @@ private:
     double alpha;
     double k1, k2, k3;
 
-    int zeta_dim, num_inputs;
+    int zeta_dim, state_space_dim;
     Eigen::MatrixXd m, n, e, s;
     Eigen::MatrixXd I_4, I_n;
     double m_12, m_13, m_14, m_32, m_33, m_42, m_43;
