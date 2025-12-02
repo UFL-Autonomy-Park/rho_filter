@@ -2,6 +2,7 @@
 #include <unsupported/Eigen/MatrixFunctions>
 #include <unsupported/Eigen/KroneckerProduct>
 #include <cmath>
+#include <iostream>
 
 rhoFilter::rhoFilter(
     double sampling_time,
@@ -20,10 +21,11 @@ rhoFilter::rhoFilter(
     zeta_dim = 4 * state_space_dim;
     num_inputs = state_space_dim;
 
-    m.resize(4, 4);
     n.resize(4, 1);
     e.resize(4, 1);
     s.resize(1, 4);
+    m.resize(4, 4);
+    m_inv.resize(4, 4);
 
     I_n = Eigen::MatrixXd::Identity(num_inputs, num_inputs);
     I_4 = Eigen::MatrixXd::Identity(4, 4);
@@ -41,6 +43,41 @@ rhoFilter::rhoFilter(
          m_13,  0,      m_33,  -1,
          m_14,  0,      m_43,  -k3;
 
+    // The below replaces one line (grr): m_inv = m.colPivHouseholderQr().inverse();
+    double det = pow(k1, 4) + 2*pow(k1, 3)*k2 + pow(k1, 2)*pow(k2, 2) + pow(k1, 2)*k2*k3 + k1*k2 + 2*k1*k3 + 1;
+    double invDet = 1.0 / det;
+    m_inv(0, 0) = 0;
+    m_inv(0, 1) = (k1*(-k1 - k2 - k3)) * invDet;
+    m_inv(0, 2) = (2*pow(k1, 3) + 3*pow(k1, 2)*k2 + pow(k1, 2)*k3 + k1*pow(k2, 2) + k1*k2*k3 + k3) * invDet;
+    m_inv(0, 3) = (2*pow(k1, 2) + k1*k2 + k1*k3 - 1) * invDet;
+
+    m_inv(1, 0) = (pow(k1, 4) + 2*pow(k1, 3)*k2 + pow(k1, 2)*pow(k2, 2) + pow(k1, 2)*k2*k3 + k1*k2 + 2*k1*k3 + 1) * invDet;
+    m_inv(1, 1) = 0;
+    m_inv(1, 2) = 0;
+    m_inv(1, 3) = 0;
+
+    m_inv(2, 0) = 0;
+    m_inv(2, 1) = (pow(k1, 2) + k1*k2 - 1) * invDet;
+    m_inv(2, 2) = (-2*pow(k1, 3) - 3*pow(k1, 2)*k2 - k1*pow(k2, 2) - k1*k2*k3 + 2*k1 + k2 - 2*k3) * invDet;
+    m_inv(2, 3) = (3 - pow(k1, 2)) * invDet;
+
+    m_inv(3, 0) = 0;
+    m_inv(3, 1) = (-pow(k1, 3) - pow(k1, 2)*k2 + pow(k1, 2)*k3 + k1*k2*k3 + 2*k1 + k2) * invDet;
+    m_inv(3, 2) = (pow(k1, 4) + pow(k1, 3)*k2 - pow(k1, 3)*k3 - pow(k1, 2)*k2*k3 - 4*pow(k1, 2) - 5*k1*k2 + k1*k3 - pow(k2, 2) + k2*k3 - 1) * invDet;
+    m_inv(3, 3) = (-2*pow(k1, 2)*k2 - pow(k1, 2)*k3 - k1*pow(k2, 2) - k1*k2*k3 - 5*k1 - 2*k2) * invDet;
+
+    // end m_inv
+
+    // Check M * M_inv ~ Identity
+    Eigen::Matrix4d identity_check = m * m_inv;
+
+    std::cout << "M * M_inv (Should be Identity):" << std::endl;
+    std::cout << identity_check << std::endl;
+
+    // Quantitative check
+    double error = (identity_check - Eigen::Matrix4d::Identity()).norm();
+    std::cout << "Inverse Error Norm: " << error << std::endl;
+
     n_12 = 3 - pow(k1,2) + (2*k1 + k2 + k3)*(k1 + k2);
     n_13 = k1 + k2;
     n_14 = 1 + (k1 + k2)*(k3 - k1);
@@ -54,8 +91,7 @@ rhoFilter::rhoFilter(
          0,
          0;
     s << -1, 0, -1, 0;
-    
-    m_inv = m.colPivHouseholderQr().inverse();
+
     a_d = (m * sampling_time).exp();
     b_q = m_inv * (a_d - I_4) * n;
     b_s = m_inv * (a_d - I_4) * e;
@@ -73,8 +109,9 @@ rhoFilter::rhoFilter(
     next_zeta.setZero();
 }
 
-void rhoFilter::propagate_filter(const Eigen::MatrixXd& last_position) // q_k, which must be a (n,1)
+void rhoFilter::propagate_filter(const Eigen::MatrixXd& last_position) 
 {
+    // last_position (q_k) is (n,1)
     // S is (n,4n)
     // N is (4n,n)
     // E is (4n,n)
@@ -88,13 +125,6 @@ void rhoFilter::propagate_filter(const Eigen::MatrixXd& last_position) // q_k, w
     v += last_position;
     next_zeta.noalias() = A_d * zeta;
     next_zeta.noalias() += B_q * last_position;
-    double epsilon = 0.5; 
-
-    // this works better:
-    // next_zeta.noalias() += alpha * B_s * v.unaryExpr([epsilon](double x){ 
-    //     return std::tanh(x / epsilon); 
-    // });
-
     next_zeta.noalias() += alpha * B_s * v.cwiseSign();
     zeta = next_zeta;
 }
