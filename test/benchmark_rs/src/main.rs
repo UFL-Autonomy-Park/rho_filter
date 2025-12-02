@@ -8,15 +8,15 @@ struct RhoFilter {
     bq: DMatrix<f64>,
     bs: DMatrix<f64>,
     s: DMatrix<f64>,
-    // State vector
+    // State vectors
     zeta: DVector<f64>,
-    // Temps to avoid allocation in loop
     v: DVector<f64>,
     next_zeta: DVector<f64>, 
 }
 
 impl RhoFilter {
     fn new(dt: f64, n: usize, alpha: f64, k1: f64, k2: f64, k3: f64) -> Self {
+        // --- Matrix Setup (Identical Logic) ---
         let m12 = -(3.0 - k1.powi(2) + (2.0*k1 + k2 + k3)*(k1 + k2));
         let m13 = -(k1 + k2);
         let m14 = -(1.0 + (k1 + k2)*(k3 - k1));
@@ -32,7 +32,6 @@ impl RhoFilter {
             m14, 0.0, m43, -k3,
         ]);
 
-        // Symbolic Inverse
         let det = k1.powi(4) + 2.0*k1.powi(3)*k2 + k1.powi(2)*k2.powi(2) 
                 + k1.powi(2)*k2*k3 + k1*k2 + 2.0*k1*k3 + 1.0;
         let idet = 1.0 / det;
@@ -57,14 +56,12 @@ impl RhoFilter {
         let e_vec = DMatrix::from_row_slice(4, 1, &[0.0, 1.0, 0.0, 0.0]);
         let s_vec = DMatrix::from_row_slice(1, 4, &[-1.0, 0.0, -1.0, 0.0]);
 
-        // Discretization
         let ad_small = (&m * dt).exp();
         let i_4 = DMatrix::<f64>::identity(4, 4);
         let term = &ad_small - &i_4;
         let bq_small = &m_inv * &term * &n_vec;
         let bs_small = &m_inv * &term * &e_vec;
 
-        // Expansion (Kronecker)
         let i_n = DMatrix::<f64>::identity(n, n);
         
         RhoFilter {
@@ -79,22 +76,27 @@ impl RhoFilter {
         }
     }
 
+    #[inline(always)]
     fn update(&mut self, q: &DVector<f64>) {
-        // v = S * zeta + q
+        // v = S * zeta
+        // Optimized: direct write to self.v, no allocation
         self.s.mul_to(&self.zeta, &mut self.v);
-        self.v += q;
+        self.v += q; // Vector addition is efficient
 
-        // next = Ad * zeta
+        // next_zeta = Ad * zeta
+        // Optimized: overwrites next_zeta
         self.ad.mul_to(&self.zeta, &mut self.next_zeta);
         
-        // next += Bq * q
-        self.next_zeta += &self.bq * q;
+        // next_zeta += Bq * q
+        // Optimized: gemv(alpha, A, x, beta) -> y = alpha*A*x + beta*y
+        // Equivalent to Eigen's noalias() accumulation
+        self.next_zeta.gemv(1.0, &self.bq, q, 1.0);
 
-        // next += alpha * Bs * sgn(v)
-        // In-place map for signum to avoid allocation
+        // next_zeta += alpha * Bs * sgn(v)
         self.v.apply(|x| *x = x.signum()); 
-        let switching = &self.bs * &self.v;
-        self.next_zeta += self.alpha * switching;
+        
+        // Optimized: Accumulate directly into next_zeta
+        self.next_zeta.gemv(self.alpha, &self.bs, &self.v, 1.0);
 
         self.zeta.copy_from(&self.next_zeta);
     }
