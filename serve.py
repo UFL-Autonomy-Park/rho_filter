@@ -9,7 +9,7 @@ mimetypes.add_type('application/wasm', '.wasm')
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory="gui_test", **kwargs)
+        super().__init__(*args, directory="test/gui_test", **kwargs)
 
 print("Serving on http://localhost:8000")
 with socketserver.TCPServer(("", 8000), Handler) as httpd:

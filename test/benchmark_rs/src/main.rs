@@ -103,8 +103,8 @@ impl RhoFilter {
 }
 
 fn main() {
-    let mut f = RhoFilter::new(0.01, 1, 2.0, 10.0, 2.0, 2.0);
-    let mut q = DVector::from_element(1, 1.0);
+    let mut f = RhoFilter::new(0.01, 4, 2.0, 10.0, 2.0, 2.0);
+    let mut q = DVector::from_element(4, 1.0);
     let mut p = 0.0;
     let omega = 2.0;
     let dt = 0.01;

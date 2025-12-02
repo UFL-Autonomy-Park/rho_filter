@@ -86,12 +86,12 @@ emcc src/rhoFilter.cpp src/bindings.cpp `
 
 (Adjust include path -I if your Homebrew location differs)
 
-emcc -O3 -Iinclude -I/opt/homebrew/include/eigen3 src/rhoFilter.cpp src/bindings.cpp -o gui_test/rho_wasm.js -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME="createRhoModule" -s ALLOW_MEMORY_GROWTH=1 -s NO_DISABLE_EXCEPTION_CATCHING --bind
+emcc -O3 -Iinclude -I/opt/homebrew/include/eigen3 src/rhoFilter.cpp src/bindings.cpp -o test/gui_test/rho_wasm.js -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME="createRhoModule" -s ALLOW_MEMORY_GROWTH=1 -s NO_DISABLE_EXCEPTION_CATCHING --bind
 
 ## 3. Running
 
 Browsers block Wasm loading from local files. Serve via HTTP from the project root:
 
-python3 -m http.server -d public 8000
+python3 -m http.server -d test/gui_test 8000
 
 Open http://localhost:8000 in your browser.
